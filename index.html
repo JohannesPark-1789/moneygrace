@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>moneygrace · 훈련일기</title>
+    <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+    <link rel="apple-touch-icon" href="./icon.svg" />
+    <link rel="mask-icon" href="./icon.svg" color="#1b1b18" />
+    <link rel="manifest" href="./manifest.json" />
+    <meta name="theme-color" content="#fbfaf5" />
+    <meta name="apple-mobile-web-app-title" content="moneygrace" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <aside class="principles" aria-label="개인 원칙" id="principles-block">
+        <div class="principles-head">
+          <span class="principles-label" id="principles-label">개인 원칙</span>
+          <span class="principles-date" id="principles-date"></span>
+          <button type="button" id="principles-edit" class="principles-edit linkish">편집</button>
+        </div>
+        <ol class="principles-list" id="principles-list">
+          <li class="principles-empty">편집을 눌러 개인 원칙을 적어두세요. 이 내용은 이 브라우저에만 저장되며 공개되지 않습니다.</li>
+        </ol>
+      </aside>
+
+      <div class="brand">
+        <p class="eyebrow">moneygrace · 법인카드 훈련일기</p>
+        <h1>맡겨진 몫을 흘려보내는 기록</h1>
+        <p class="subtitle">
+          이것은 가계부가 아닙니다. 돈을 쓰는 법을 배우는 훈련이고, 사람을
+          살피는 연습이며, 맡겨진 책임의 무게를 재는 저울입니다.
+        </p>
+      </div>
+
+      <blockquote class="epigraph">
+        <p>
+          쓰지 않은 몫은 묻혀 사라진다. 써본 자만이 써야 할 때 망설이지
+          않는다.
+        </p>
+        <p class="whisper" id="whisper">&nbsp;</p>
+      </blockquote>
+
+      <nav class="month-nav" aria-label="월 이동">
+        <button id="prev-month" class="icon-btn" aria-label="이전 달">‹</button>
+        <button id="current-month" class="month-label" aria-live="polite">—</button>
+        <button id="next-month" class="icon-btn" aria-label="다음 달">›</button>
+      </nav>
+    </header>
+
+    <section class="summary" aria-label="이번 달 요약">
+      <div class="summary-card">
+        <span class="summary-label">맡겨진 몫</span>
+        <strong id="budget" class="summary-value">₩1,000,000</strong>
+        <span class="budget-actions">
+          <button id="edit-budget" class="linkish">금액 조정</button>
+          <button id="edit-start" class="linkish">시작일</button>
+        </span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">흘려보낸 몫</span>
+        <strong id="spent" class="summary-value">₩0</strong>
+        <span id="spent-sub" class="summary-sub">0건의 기록</span>
+      </div>
+      <div id="remaining-card" class="summary-card highlight">
+        <span id="remaining-label" class="summary-label">아직 묶여있는 몫</span>
+        <strong id="remaining" class="summary-value">₩1,000,000</strong>
+        <span id="remaining-sub" class="summary-sub">달란트를 땅에 묻어두지 말 것</span>
+      </div>
+      <div class="pace">
+        <div class="progress" aria-label="흘려보낸 비율">
+          <div id="progress-bar" class="progress-bar" style="width: 0%"></div>
+          <div id="pace-marker" class="pace-marker" style="left: 0%" aria-hidden="true"></div>
+        </div>
+        <div class="pace-meta">
+          <span id="progress-text" class="progress-text">0%</span>
+          <span id="pace-text" class="pace-text">오늘까지 기대되는 흐름 —</span>
+        </div>
+        <p id="pace-verdict" class="pace-verdict">이달의 훈련이 시작되었습니다.</p>
+        <p id="stretch-summary" class="stretch-summary">이달의 걸음 — 아직 없음</p>
+      </div>
+    </section>
+
+    <section class="form-section" aria-label="훈련 기록 남기기">
+      <h2>오늘의 훈련 기록</h2>
+      <p class="section-sub">
+        건넨 것, 함께한 사람, 상대의 반응, 나의 배움. 망설임 없이 적어둡니다.
+      </p>
+      <form id="expense-form" autocomplete="off">
+        <div class="receipt-field">
+          <div class="receipt-buttons">
+            <label class="receipt-btn" for="receipt-camera">
+              <input
+                id="receipt-camera"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                hidden
+              />
+              <span class="receipt-cta receipt-cta-camera">사진 촬영</span>
+            </label>
+            <label class="receipt-btn" for="receipt-gallery">
+              <input
+                id="receipt-gallery"
+                type="file"
+                accept="image/*"
+                hidden
+              />
+              <span class="receipt-cta receipt-cta-gallery">앨범에서 고르기</span>
+            </label>
+          </div>
+          <div id="receipt-progress" class="receipt-progress" hidden aria-live="polite">
+            <div class="receipt-progress-track">
+              <div id="receipt-progress-bar" class="receipt-progress-bar"></div>
+            </div>
+            <span id="receipt-progress-label" class="receipt-progress-label"></span>
+          </div>
+          <span id="receipt-status" class="receipt-status" aria-live="polite"></span>
+        </div>
+        <div class="grid">
+          <label class="field">
+            <span>날짜</span>
+            <input type="date" name="date" required min="2026-04-16" />
+          </label>
+          <label class="field">
+            <span>시간 (선택)</span>
+            <input type="time" name="time" step="60" />
+          </label>
+          <label class="field">
+            <span>흘려보낸 금액 (원)</span>
+            <input
+              type="number"
+              name="amount"
+              min="0"
+              step="1"
+              required
+              inputmode="numeric"
+              placeholder="예: 58,000"
+            />
+          </label>
+          <label class="field">
+            <span>어디에서</span>
+            <input
+              type="text"
+              name="place"
+              required
+              placeholder="장소 · 가게 · 브랜드"
+            />
+          </label>
+          <label class="field">
+            <span>대상 — 누구를 / 무엇을 위해</span>
+            <input
+              type="text"
+              name="forWhom"
+              required
+              placeholder="이름·관계 · 팀·공동체 · 프로젝트. 구체적으로."
+            />
+          </label>
+          <label class="field wide purpose-field">
+            <span>목적 — 바라는 열매</span>
+            <input
+              type="text"
+              name="purpose"
+              required
+              placeholder="이 지출로 어떤 일이 일어나길 바라는가 · 어떤 변화를 원하는가"
+            />
+          </label>
+          <label class="field">
+            <span>쓰임의 결</span>
+            <select name="category">
+              <option value="귀한 손님 대접">귀한 손님 대접</option>
+              <option value="동료 챙김">동료 챙김</option>
+              <option value="선물 나눔">선물 나눔</option>
+              <option value="간식 나눔">간식 나눔</option>
+              <option value="좋은 공간 경험">좋은 공간 경험</option>
+              <option value="배움 · 책">배움 · 책</option>
+              <option value="본인 훈련">본인 훈련</option>
+              <option value="나를 사랑하기">나를 사랑하기</option>
+              <option value="기타">기타 (직접 입력)</option>
+            </select>
+            <input
+              type="text"
+              name="categoryCustom"
+              class="category-custom"
+              placeholder="직접 입력 — 이 쓰임의 결을 한마디로"
+              hidden
+            />
+          </label>
+          <label class="field">
+            <span>쓰임의 계기 / 맥락</span>
+            <input
+              type="text"
+              name="context"
+              placeholder="어떤 상황에서, 왜 이렇게 쓰기로 했는가"
+            />
+          </label>
+          <div class="field wide">
+            <span>도전의 결</span>
+            <div class="segmented" role="radiogroup" aria-label="도전의 결">
+              <label>
+                <input type="radio" name="stretch" value="usual" checked />
+                <span>평소</span>
+              </label>
+              <label>
+                <input type="radio" name="stretch" value="step" />
+                <span>한 걸음</span>
+              </label>
+              <label>
+                <input type="radio" name="stretch" value="challenge" />
+                <span>도전</span>
+              </label>
+            </div>
+            <p class="segmented-hint">평소엔 하지 않는 지출을 얼마나 시도했는가.</p>
+          </div>
+          <div class="field wide">
+            <span>경험의 갈무리</span>
+            <div class="segmented mark-segmented" role="radiogroup" aria-label="경험의 갈무리">
+              <label>
+                <input type="radio" name="mark" value="none" checked />
+                <span>중립</span>
+              </label>
+              <label>
+                <input type="radio" name="mark" value="bookmark" />
+                <span>다시 하고픈 · 책갈피</span>
+              </label>
+              <label>
+                <input type="radio" name="mark" value="waste" />
+                <span>낭비였다</span>
+              </label>
+            </div>
+            <p class="segmented-hint">좋은 경험은 책갈피로 모아두고, 낭비는 있는 그대로 적어둡니다.</p>
+          </div>
+          <label class="field wide">
+            <span>상대의 반응 · 관찰</span>
+            <textarea
+              name="observation"
+              rows="2"
+              placeholder="얼굴 표정, 말 한마디, 눈빛. 그 자리에서 오간 것."
+            ></textarea>
+          </label>
+          <label class="field wide">
+            <span>나의 배움 · 깨달음</span>
+            <textarea
+              name="learning"
+              rows="3"
+              placeholder="다음엔 어떻게 할 것인가. 무엇이 좋은 쓰임이었는지 배운 것을 적어둡니다."
+            ></textarea>
+          </label>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="primary">훈련으로 남기기</button>
+          <button type="reset" class="ghost">비우기</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="list-section" aria-label="훈련 기록">
+      <div class="list-header">
+        <h2 id="list-title">이번 달 훈련 기록</h2>
+        <span id="count" class="count">0건</span>
+      </div>
+      <div class="search">
+        <input
+          id="search-input"
+          type="search"
+          placeholder="전체 기록에서 찾기 — 장소·사람·카테고리·메모"
+          autocomplete="off"
+        />
+        <button id="search-clear" class="linkish" type="button">지우기</button>
+      </div>
+      <div class="filters" role="toolbar" aria-label="필터">
+        <button class="filter-chip active" data-filter="all" type="button">이번 달</button>
+        <button class="filter-chip" data-filter="bookmark" type="button">책갈피</button>
+        <button class="filter-chip" data-filter="waste" type="button">낭비</button>
+        <button class="filter-chip" data-filter="challenge" type="button">도전</button>
+      </div>
+      <p id="search-meta" class="search-meta" style="display:none"></p>
+      <ul id="expense-list" class="expense-list"></ul>
+      <p id="empty" class="empty">
+        아직 묻혀있습니다. 오늘, 누구의 얼굴에 웃음을 더하러 가시겠습니까?
+      </p>
+    </section>
+
+    <section class="reflection-section" aria-label="이번 달 복기">
+      <div class="reflection-header">
+        <h2>이번 달의 복기</h2>
+        <button id="report-btn" class="linkish" type="button">이달의 보고서</button>
+      </div>
+      <p class="section-sub">
+        숫자의 총합이 아니라 사람의 얼굴을 떠올리며 적습니다.
+      </p>
+      <textarea
+        id="monthly-reflection"
+        rows="5"
+        placeholder="이번 달 누구를 가장 기쁘게 했는가. 어떤 쓰임이 서툴렀는가. 다음 달엔 무엇을 시도할 것인가."
+      ></textarea>
+      <div class="reflection-meta">
+        <span id="reflection-saved" class="saved-hint">자동 저장됨</span>
+      </div>
+    </section>
+
+    <input id="import-input" type="file" accept="application/json" hidden />
+    <footer class="app-footer">
+      <div class="footer-row">
+        <button id="export-btn" class="linkish">JSON 내보내기</button>
+        <label class="linkish" for="import-input">JSON 가져오기</label>
+        <button id="restore-btn" class="linkish">자동 백업에서 복원</button>
+      </div>
+      <button id="clear-month" class="linkish danger">이번 달 기록 삭제</button>
+      <span id="saved-indicator" class="saved-indicator" aria-live="polite"></span>
+    </footer>
+
+    <dialog id="principles-dialog">
+      <h3>개인 원칙 편집</h3>
+      <form method="dialog" id="principles-form">
+        <div class="grid">
+          <label class="field wide">
+            <span>제목</span>
+            <input type="text" name="label" placeholder="개인 원칙" autocomplete="off" />
+          </label>
+          <label class="field wide">
+            <span>날짜 · 출처 (선택)</span>
+            <input type="text" name="date" placeholder="예: 2026.04.16" autocomplete="off" />
+          </label>
+          <label class="field wide">
+            <span>내용 (줄마다 한 조항, **강조**로 굵게)</span>
+            <textarea name="items" rows="8" placeholder="한 조항씩 줄 바꿔 적어주세요. **굵게** 표현 가능."></textarea>
+          </label>
+          <p class="segmented-hint">
+            이 내용은 이 브라우저의 localStorage 에만 저장됩니다.
+            공개 저장소나 서버에는 저장되지 않습니다.
+          </p>
+        </div>
+        <div class="form-actions">
+          <button value="cancel" class="ghost">취소</button>
+          <button value="save" class="primary">저장</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="report-dialog" class="report-dialog">
+      <div class="report-toolbar">
+        <strong id="report-title">이달의 보고서</strong>
+        <div class="report-actions">
+          <button type="button" id="report-print" class="linkish">인쇄</button>
+          <button type="button" id="report-copy" class="linkish">전체 복사</button>
+          <button type="button" id="report-download" class="linkish">마크다운 다운로드</button>
+          <button type="button" id="report-close" class="linkish">닫기</button>
+        </div>
+      </div>
+      <div id="report-body" class="report-body"></div>
+    </dialog>
+
+    <dialog id="restore-dialog">
+      <h3>자동 백업에서 복원</h3>
+      <p class="section-sub">
+        저장할 때마다 자동으로 생성된 지점입니다. 시점을 고르면 그때로 되돌릴
+        수 있으며, 현재 상태 역시 "복원 직전"으로 자동 백업되어 다시 돌아올
+        수 있습니다.
+      </p>
+      <ul id="restore-list" class="restore-list"></ul>
+      <div class="form-actions" style="justify-content:flex-end">
+        <button id="restore-close" class="ghost" type="button">닫기</button>
+      </div>
+    </dialog>
+
+    <dialog id="edit-dialog">
+      <form method="dialog" id="edit-form">
+        <h3>훈련 기록 수정</h3>
+        <div class="grid">
+          <label class="field">
+            <span>날짜</span>
+            <input type="date" name="date" required min="2026-04-16" />
+          </label>
+          <label class="field">
+            <span>시간 (선택)</span>
+            <input type="time" name="time" step="60" />
+          </label>
+          <label class="field">
+            <span>흘려보낸 금액 (원)</span>
+            <input type="number" name="amount" min="0" step="1" required inputmode="numeric" />
+          </label>
+          <label class="field">
+            <span>어디에서</span>
+            <input type="text" name="place" required />
+          </label>
+          <label class="field">
+            <span>대상 — 누구를 / 무엇을 위해</span>
+            <input type="text" name="forWhom" required />
+          </label>
+          <label class="field wide purpose-field">
+            <span>목적 — 바라는 열매</span>
+            <input type="text" name="purpose" required />
+          </label>
+          <label class="field">
+            <span>쓰임의 결</span>
+            <select name="category">
+              <option value="귀한 손님 대접">귀한 손님 대접</option>
+              <option value="동료 챙김">동료 챙김</option>
+              <option value="선물 나눔">선물 나눔</option>
+              <option value="간식 나눔">간식 나눔</option>
+              <option value="좋은 공간 경험">좋은 공간 경험</option>
+              <option value="배움 · 책">배움 · 책</option>
+              <option value="본인 훈련">본인 훈련</option>
+              <option value="나를 사랑하기">나를 사랑하기</option>
+              <option value="기타">기타 (직접 입력)</option>
+            </select>
+            <input
+              type="text"
+              name="categoryCustom"
+              class="category-custom"
+              placeholder="직접 입력"
+              hidden
+            />
+          </label>
+          <label class="field">
+            <span>쓰임의 계기 / 맥락</span>
+            <input type="text" name="context" />
+          </label>
+          <div class="field wide">
+            <span>도전의 결</span>
+            <div class="segmented" role="radiogroup" aria-label="도전의 결">
+              <label>
+                <input type="radio" name="stretch" value="usual" />
+                <span>평소</span>
+              </label>
+              <label>
+                <input type="radio" name="stretch" value="step" />
+                <span>한 걸음</span>
+              </label>
+              <label>
+                <input type="radio" name="stretch" value="challenge" />
+                <span>도전</span>
+              </label>
+            </div>
+          </div>
+          <div class="field wide">
+            <span>경험의 갈무리</span>
+            <div class="segmented mark-segmented" role="radiogroup" aria-label="경험의 갈무리">
+              <label>
+                <input type="radio" name="mark" value="none" />
+                <span>중립</span>
+              </label>
+              <label>
+                <input type="radio" name="mark" value="bookmark" />
+                <span>다시 하고픈 · 책갈피</span>
+              </label>
+              <label>
+                <input type="radio" name="mark" value="waste" />
+                <span>낭비였다</span>
+              </label>
+            </div>
+          </div>
+          <label class="field wide">
+            <span>상대의 반응 · 관찰</span>
+            <textarea name="observation" rows="2"></textarea>
+          </label>
+          <label class="field wide">
+            <span>나의 배움 · 깨달음</span>
+            <textarea name="learning" rows="3"></textarea>
+          </label>
+        </div>
+        <div class="form-actions">
+          <button value="cancel" class="ghost">취소</button>
+          <button id="edit-save" value="save" class="primary">저장</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
