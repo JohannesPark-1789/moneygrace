@@ -387,6 +387,7 @@
     renderSummary();
     renderList();
     renderReflection();
+    refreshSuggestions();
   }
 
   function renderHeader() {
@@ -2192,6 +2193,110 @@
     el.clearMonth.addEventListener("click", clearMonth);
   }
 
+  // --- Suggestions (autocomplete) ----------------------------------------
+  function populateDatalist(id, field) {
+    const dl = document.getElementById(id);
+    if (!dl) return;
+    /** @type {Map<string, number>} */
+    const counts = new Map();
+    for (const e of store.entries) {
+      const v = (e && e[field] ? String(e[field]) : "").trim();
+      if (!v) continue;
+      counts.set(v, (counts.get(v) || 0) + 1);
+    }
+    if (field === "category") {
+      // category 직접 입력은 프리셋 외 값만
+      for (const [v] of [...counts.entries()]) {
+        if (PRESET_CATEGORIES.includes(v)) counts.delete(v);
+      }
+    }
+    const sorted = [...counts.entries()].sort(
+      (a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)
+    );
+    dl.innerHTML = sorted
+      .map(([v]) => `<option value="${escapeHtml(v)}"></option>`)
+      .join("");
+  }
+
+  function refreshSuggestions() {
+    populateDatalist("place-suggestions", "place");
+    populateDatalist("forwhom-suggestions", "forWhom");
+    populateDatalist("purpose-suggestions", "purpose");
+    populateDatalist("category-custom-suggestions", "category");
+  }
+
+  // 정규화: 공백·구두점 제거 + 소문자
+  function normalize(s) {
+    return String(s || "")
+      .toLowerCase()
+      .replace(/[\s\.\-_·,!\?\(\)\[\]\/\\"'’`~]/g, "");
+  }
+
+  // 입력값과 정규화 일치하지만 표기가 다른 과거 값이 있는지 검사 → 힌트
+  function similarityHint(input, value, field) {
+    if (!input) return null;
+    const n = normalize(value);
+    if (!n) return null;
+    /** @type {Map<string, number>} */
+    const counts = new Map();
+    for (const e of store.entries) {
+      const v = (e && e[field] ? String(e[field]) : "").trim();
+      if (!v) continue;
+      counts.set(v, (counts.get(v) || 0) + 1);
+    }
+    // 완전 일치하는 값이 이미 있으면 힌트 불필요
+    if (counts.has(value.trim())) return null;
+    const matches = [];
+    for (const [v, c] of counts) {
+      if (normalize(v) === n) matches.push({ v, c });
+    }
+    if (!matches.length) return null;
+    matches.sort((a, b) => b.c - a.c);
+    return matches[0].v; // 가장 자주 쓴 표기
+  }
+
+  function bindSimilarityHints() {
+    const fields = [
+      ["place", el.form, el.editForm],
+      ["forWhom", el.form, el.editForm],
+      ["purpose", el.form, el.editForm],
+    ];
+    for (const [field, ...forms] of fields) {
+      for (const form of forms) {
+        if (!form) continue;
+        const input = form.querySelector(`input[name="${field}"]`);
+        if (!input) continue;
+        // 기존 hint 노드 재활용
+        let hint = input.nextElementSibling;
+        if (!hint || !hint.classList || !hint.classList.contains("similar-hint")) {
+          hint = document.createElement("p");
+          hint.className = "similar-hint";
+          input.parentNode.insertBefore(hint, input.nextSibling);
+        }
+        const update = () => {
+          const v = input.value.trim();
+          const sim = similarityHint(v, v, field);
+          if (sim && sim !== v) {
+            hint.innerHTML = `과거에 같은 표현으로 "<button type="button" class="similar-pick">${escapeHtml(sim)}</button>" 가 있습니다.`;
+            hint.style.display = "block";
+            const pick = hint.querySelector(".similar-pick");
+            if (pick)
+              pick.addEventListener("click", () => {
+                input.value = sim;
+                hint.style.display = "none";
+                input.focus();
+              });
+          } else {
+            hint.style.display = "none";
+            hint.innerHTML = "";
+          }
+        };
+        input.addEventListener("input", update);
+        input.addEventListener("blur", update);
+      }
+    }
+  }
+
   function checkMonthRoll() {
     const nowKey = monthKey(new Date());
     if (nowKey === lastRealMonth) {
@@ -2217,6 +2322,8 @@
     bind();
     render();
     renderPrinciples();
+    refreshSuggestions();
+    bindSimilarityHints();
     if (loadSnapshots().length === 0) pushSnapshot("initial");
 
     // 월 경계 자동 재렌더

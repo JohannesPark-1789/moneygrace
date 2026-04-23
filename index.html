@@ -147,6 +147,8 @@
               type="text"
               name="place"
               required
+              list="place-suggestions"
+              autocomplete="off"
               placeholder="장소 · 가게 · 브랜드"
             />
           </label>
@@ -156,6 +158,8 @@
               type="text"
               name="forWhom"
               required
+              list="forwhom-suggestions"
+              autocomplete="off"
               placeholder="이름·관계 · 팀·공동체 · 프로젝트. 구체적으로."
             />
           </label>
@@ -165,6 +169,8 @@
               type="text"
               name="purpose"
               required
+              list="purpose-suggestions"
+              autocomplete="off"
               placeholder="이 지출로 어떤 일이 일어나길 바라는가 · 어떤 변화를 원하는가"
             />
           </label>
@@ -303,6 +309,11 @@
     </section>
 
     <input id="import-input" type="file" accept="application/json" hidden />
+
+    <datalist id="place-suggestions"></datalist>
+    <datalist id="forwhom-suggestions"></datalist>
+    <datalist id="purpose-suggestions"></datalist>
+    <datalist id="category-custom-suggestions"></datalist>
     <footer class="app-footer">
       <div class="footer-row">
         <button id="export-btn" class="linkish">JSON 내보내기</button>
@@ -385,15 +396,15 @@
           </label>
           <label class="field">
             <span>어디에서</span>
-            <input type="text" name="place" required />
+            <input type="text" name="place" required list="place-suggestions" autocomplete="off" />
           </label>
           <label class="field">
             <span>대상 — 누구를 / 무엇을 위해</span>
-            <input type="text" name="forWhom" required />
+            <input type="text" name="forWhom" required list="forwhom-suggestions" autocomplete="off" />
           </label>
           <label class="field wide purpose-field">
             <span>목적 — 바라는 열매</span>
-            <input type="text" name="purpose" required />
+            <input type="text" name="purpose" required list="purpose-suggestions" autocomplete="off" />
           </label>
           <label class="field">
             <span>쓰임의 결</span>
@@ -412,6 +423,8 @@
               type="text"
               name="categoryCustom"
               class="category-custom"
+              list="category-custom-suggestions"
+              autocomplete="off"
               placeholder="직접 입력"
               hidden
             />

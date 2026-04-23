@@ -478,6 +478,31 @@ select {
 .category-custom { margin-top: 8px; }
 .category-custom[hidden] { display: none; }
 
+.similar-hint {
+  display: none;
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  background: #fbf3e2;
+  border-left: 2px solid var(--accent-soft);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: 0.02em;
+}
+.similar-hint .similar-pick {
+  background: none;
+  border: none;
+  border-bottom: 1px dashed var(--seal);
+  color: var(--seal);
+  padding: 0 2px;
+  font: inherit;
+  cursor: pointer;
+}
+.similar-hint .similar-pick:hover {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
 .segmented {
   display: inline-flex;
   border: 1px solid var(--rule);
