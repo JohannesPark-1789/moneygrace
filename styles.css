@@ -723,6 +723,20 @@ select {
   font-family: ui-sans-serif, system-ui, sans-serif;
   font-size: 12.5px;
 }
+.entry .receipt-img {
+  display: block;
+  max-width: 100%;
+  max-height: 560px;
+  width: auto;
+  height: auto;
+  margin: 10px 0 4px;
+  border: 1px solid var(--rule);
+  background: #fff;
+  cursor: zoom-in;
+}
+.entry .receipt-img:active {
+  transform: scale(0.995);
+}
 .entry .receipt-raw {
   margin: 10px 0 4px;
   padding: 10px 14px;
@@ -1070,6 +1084,27 @@ a:hover { color: var(--ink); }
   .report-section { page-break-after: always; border-bottom: none; }
   .report-section:last-child { page-break-after: auto; }
 }
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 8, 4, 0.9);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  cursor: zoom-out;
+  animation: lightbox-in 0.15s ease-out;
+}
+.lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  background: #fff;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+}
+@keyframes lightbox-in { from { opacity: 0; } to { opacity: 1; } }
 
 .update-banner {
   position: fixed;

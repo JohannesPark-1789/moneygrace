@@ -42,7 +42,7 @@
   /** @typedef {"usual"|"step"|"challenge"} Stretch */
   /** @typedef {"none"|"bookmark"|"waste"} Mark */
   /** @typedef {{name:string, quantity?:number, price?:number}} ReceiptItem */
-  /** @typedef {{id:string,date:string,time:string,amount:number,place:string,forWhom:string,purpose:string,category:string,context:string,observation:string,learning:string,stretch:Stretch,mark:Mark,receiptText:string,receiptItems:ReceiptItem[]}} Entry */
+  /** @typedef {{id:string,date:string,time:string,amount:number,place:string,forWhom:string,purpose:string,category:string,context:string,observation:string,learning:string,stretch:Stretch,mark:Mark,receiptText:string,receiptItems:ReceiptItem[],receiptImage:string}} Entry */
   /** @typedef {{budgets:Record<string,number>,entries:Entry[],reflections:Record<string,string>}} Store */
 
   /** @type {Store} */
@@ -56,6 +56,7 @@
   let pendingReceiptText = "";
   /** @type {ReceiptItem[]} */
   let pendingReceiptItems = [];
+  let pendingReceiptImage = "";
   /** @type {Promise<any>|null} */
   let tesseractPromise = null;
 
@@ -101,6 +102,7 @@
               e.mark === "bookmark" || e.mark === "waste" ? e.mark : "none",
             receiptText: e.receiptText || "",
             receiptItems: Array.isArray(e.receiptItems) ? e.receiptItems : [],
+            receiptImage: e.receiptImage || "",
           };
           // 미래에 추가될 알 수 없는 키는 스프레드로 보존
           return { ...e, ...base };
@@ -761,13 +763,12 @@
             ${(() => {
               const hasItems =
                 Array.isArray(e.receiptItems) && e.receiptItems.length > 0;
+              const img = (e.receiptImage || "").trim();
               const raw = (e.receiptText || "").trim();
-              if (!hasItems && !raw) return "";
-              const summary = hasItems
-                ? `<span class="items-count">상품 ${e.receiptItems.length}건</span>`
-                : `<span class="items-count">OCR 원문</span>`;
-              let inner = "";
+              if (!hasItems && !img && !raw) return "";
+              let summary, inner;
               if (hasItems) {
+                summary = `<span class="items-count">상품 ${e.receiptItems.length}건</span>`;
                 const items = e.receiptItems
                   .map((it) => {
                     if (!it || !it.name) return "";
@@ -783,7 +784,11 @@
                   .filter(Boolean)
                   .join("");
                 inner = `<ul class="items-list">${items}</ul>`;
+              } else if (img) {
+                summary = `<span class="items-count">영수증 사진</span>`;
+                inner = `<img class="receipt-img" src="${img}" alt="영수증" loading="lazy" />`;
               } else {
+                summary = `<span class="items-count">OCR 원문</span>`;
                 inner = `<pre class="receipt-raw">${highlight(raw, qHl)}</pre>`;
               }
               return `<details class="items-details">
@@ -854,6 +859,7 @@
       mark,
       receiptText: (pendingReceiptText || "").trim(),
       receiptItems: Array.isArray(pendingReceiptItems) ? pendingReceiptItems : [],
+      receiptImage: pendingReceiptImage || "",
     };
     store.entries.push(entry);
     saveStore("add");
@@ -1226,6 +1232,23 @@
     return c;
   }
 
+  // 저장용 축소 이미지 (dataURL). 원본 canvas 가 아직 색상을 유지한 상태에서 호출할 것.
+  async function compressForStorage(canvas, maxWidth = 720, quality = 0.55) {
+    const w0 = canvas.width;
+    const h0 = canvas.height;
+    const scale = w0 > maxWidth ? maxWidth / w0 : 1;
+    const w = Math.round(w0 * scale);
+    const h = Math.round(h0 * scale);
+    const c2 = document.createElement("canvas");
+    c2.width = w;
+    c2.height = h;
+    const ctx = c2.getContext("2d");
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(canvas, 0, 0, w, h);
+    return c2.toDataURL("image/jpeg", quality);
+  }
+
   // 그레이스케일 + 가벼운 대비 부스트 — Tesseract 인식률 향상용.
   // 이진화(Otsu)는 앱 스크린샷처럼 고품질 소스에선 역효과라 사용하지 않음.
   function preprocessGrayscale(canvas) {
@@ -1267,6 +1290,12 @@
   async function recognizeReceipt(file) {
     setReceiptProgress("indeterminate", 0, "사진 준비 중");
     const canvas = await imageToCanvas(file);
+    // 전처리 전에 축소 컬러 썸네일을 캡처해 저장한다.
+    try {
+      pendingReceiptImage = await compressForStorage(canvas);
+    } catch (_) {
+      pendingReceiptImage = "";
+    }
     preprocessGrayscale(canvas);
     setReceiptProgress("indeterminate", 0, "엔진 준비 중");
     const Tesseract = await loadTesseract();
@@ -2040,6 +2069,7 @@
       syncCategoryCustom(el.form);
       pendingReceiptText = "";
       pendingReceiptItems = [];
+      pendingReceiptImage = "";
       setReceiptStatus("");
       setReceiptProgress(null);
       if (el.receiptCamera) el.receiptCamera.value = "";
@@ -2076,6 +2106,16 @@
     };
     bindReceipt(el.receiptCamera, "촬영");
     bindReceipt(el.receiptGallery, "앨범");
+
+    // 영수증 이미지 탭 → 라이트박스
+    el.list.addEventListener("click", (e) => {
+      const img = e.target.closest("img.receipt-img");
+      if (img && img.src) {
+        showImageLightbox(img.src);
+        e.preventDefault();
+        return;
+      }
+    });
 
     el.list.addEventListener("click", (e) => {
       const btn = e.target.closest("button[data-action]");
@@ -2295,6 +2335,14 @@
         input.addEventListener("blur", update);
       }
     }
+  }
+
+  function showImageLightbox(src) {
+    const box = document.createElement("div");
+    box.className = "lightbox";
+    box.innerHTML = `<img src="${src}" alt="영수증" />`;
+    box.addEventListener("click", () => box.remove());
+    document.body.appendChild(box);
   }
 
   function checkMonthRoll() {

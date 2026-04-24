@@ -1,6 +1,6 @@
 // moneygrace service worker — 오프라인 지원 + 앱 쉘 캐시
 // 새 배포 시 VERSION 을 바꿔 캐시 갱신을 유도한다.
-const VERSION = "mg-2026-04-23-09";
+const VERSION = "mg-2026-04-23-10";
 const CACHE_NAME = `moneygrace::${VERSION}`;
 
 const APP_SHELL = [
