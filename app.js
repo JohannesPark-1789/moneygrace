@@ -13,6 +13,8 @@
   const TESSERACT_URL =
     "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
 
+  const RELATIONS = ["나", "가족", "직원", "지인", "모르는사람"];
+
   const PRESET_CATEGORIES = [
     "귀한 손님 대접",
     "동료 챙김",
@@ -41,8 +43,9 @@
   // --- State / Storage ---------------------------------------------------
   /** @typedef {"usual"|"step"|"challenge"} Stretch */
   /** @typedef {"none"|"bookmark"|"waste"} Mark */
+  /** @typedef {""|"나"|"가족"|"직원"|"지인"|"모르는사람"} Relation */
   /** @typedef {{name:string, quantity?:number, price?:number}} ReceiptItem */
-  /** @typedef {{id:string,date:string,time:string,amount:number,place:string,forWhom:string,purpose:string,category:string,context:string,observation:string,learning:string,stretch:Stretch,mark:Mark,receiptText:string,receiptItems:ReceiptItem[],receiptImage:string}} Entry */
+  /** @typedef {{id:string,date:string,time:string,amount:number,place:string,forWhom:string,relation:Relation,purpose:string,category:string,context:string,observation:string,learning:string,stretch:Stretch,mark:Mark,receiptText:string,receiptItems:ReceiptItem[],receiptImage:string}} Entry */
   /** @typedef {{budgets:Record<string,number>,entries:Entry[],reflections:Record<string,string>}} Store */
 
   /** @type {Store} */
@@ -89,6 +92,7 @@
             amount: Number(e.amount) || 0,
             place: e.place || "",
             forWhom: e.forWhom || "",
+            relation: RELATIONS.includes(e.relation) ? e.relation : "",
             purpose: e.purpose || "",
             category: e.category || "기타",
             context: e.context || "",
@@ -395,7 +399,10 @@
       reportPrint: $("#report-print"),
       reportCopy: $("#report-copy"),
       reportDownload: $("#report-download"),
+      reportCsv: $("#report-csv"),
       reportClose: $("#report-close"),
+      modeWrite: $("#mode-write"),
+      modeRead: $("#mode-read"),
       receiptCamera: $("#receipt-camera"),
       receiptGallery: $("#receipt-gallery"),
       receiptStatus: $("#receipt-status"),
@@ -628,6 +635,7 @@
     const fields = [
       "place",
       "forWhom",
+      "relation",
       "purpose",
       "category",
       "context",
@@ -792,7 +800,7 @@
               <div class="served">대상 — <strong>${highlight(
                 e.forWhom || "—",
                 qHl
-              )}</strong></div>
+              )}</strong>${e.relation ? ` <span class="relation-tag">${escapeHtml(e.relation)}</span>` : ""}</div>
             </div>
             <div class="amount">${formatWon(e.amount)}</div>
             ${
@@ -898,6 +906,7 @@
       amount: Math.max(0, Math.round(Number(data.amount) || 0)),
       place: (data.place || "").trim(),
       forWhom: (data.forWhom || "").trim(),
+      relation: RELATIONS.includes(data.relation) ? data.relation : "",
       purpose: (data.purpose || "").trim(),
       category: resolveCategory(data.category, data.categoryCustom),
       context: (data.context || "").trim(),
@@ -940,6 +949,9 @@
     f.amount.value = e.amount;
     f.place.value = e.place || "";
     f.forWhom.value = e.forWhom || "";
+    const relVal = RELATIONS.includes(e.relation) ? e.relation : "";
+    const relRadios = f.querySelectorAll('input[name="relation"]');
+    relRadios.forEach((r) => (r.checked = r.value === relVal));
     f.purpose.value = e.purpose || "";
     const cat = presetForEntry(e.category || "기타");
     f.category.value = cat.select;
@@ -983,6 +995,10 @@
       amount: Math.max(0, Math.round(Number(f.amount.value) || 0)),
       place: f.place.value.trim(),
       forWhom: f.forWhom.value.trim(),
+      relation: (() => {
+        const r = f.querySelector('input[name="relation"]:checked');
+        return r && RELATIONS.includes(r.value) ? r.value : "";
+      })(),
       purpose: f.purpose.value.trim(),
       category: resolveCategory(
         f.category.value,
@@ -1649,6 +1665,25 @@
       .map(([name, v]) => ({ name, ...v }))
       .sort((a, b) => b.sum - a.sum);
 
+    // 관계별 집계
+    /** @type {Map<string, {count:number, sum:number}>} */
+    const byRelation = new Map();
+    for (const e of entries) {
+      const r = e.relation || "미지정";
+      const cur = byRelation.get(r) || { count: 0, sum: 0 };
+      cur.count += 1;
+      cur.sum += Number(e.amount) || 0;
+      byRelation.set(r, cur);
+    }
+    const order = ["나", "가족", "직원", "지인", "모르는사람", "미지정"];
+    const relations = order
+      .map((name) => ({
+        name,
+        count: (byRelation.get(name) || { count: 0 }).count,
+        sum: (byRelation.get(name) || { sum: 0 }).sum,
+      }))
+      .filter((r) => r.count > 0);
+
     const bookmarks = entries.filter((e) => (e.mark || "none") === "bookmark");
     const wastes = entries.filter((e) => (e.mark || "none") === "waste");
 
@@ -1670,6 +1705,7 @@
       prevStretch,
       people,
       categories,
+      relations,
       bookmarks,
       wastes,
       reflection: store.reflections[key] || "",
@@ -1725,6 +1761,30 @@
         )
         .join("")}
     </ul>
+  </div>`
+      : ""
+  }
+
+  ${
+    m.relations.length
+      ? `<div class="report-group">
+    <p class="report-group-title">관계별 분포</p>
+    ${(() => {
+      const maxRel = Math.max(1, ...m.relations.map((r) => r.sum));
+      return m.relations
+        .map(
+          (r) => `
+        <div class="report-bar">
+          <span class="b-name">${escapeHtml(r.name)}</span>
+          <span class="b-bar"><span style="width:${Math.round(
+            (r.sum / maxRel) * 100
+          )}%"></span></span>
+          <span class="b-amt">${formatWon(r.sum)}</span>
+          <span class="b-cnt">${r.count}건</span>
+        </div>`
+        )
+        .join("");
+    })()}
   </div>`
       : ""
   }
@@ -1870,7 +1930,7 @@
         ${tagBits.map((t) => `<span class="re-tag">· ${t}</span>`).join("")}
       </div>
       <div class="re-place">${escapeHtml(e.place || "")}</div>
-      <div class="re-meta">대상 — <strong>${escapeHtml(e.forWhom || "—")}</strong></div>
+      <div class="re-meta">대상 — <strong>${escapeHtml(e.forWhom || "—")}</strong>${e.relation ? ` · ${escapeHtml(e.relation)}` : ""}</div>
       ${
         e.purpose
           ? `<div class="re-row purpose"><span class="lbl">바라는 열매</span>${escapeHtml(e.purpose)}</div>`
@@ -1944,6 +2004,13 @@
       lines.push(`## 함께한 사람들`);
       m.people.slice(0, 5).forEach((p, i) => {
         lines.push(`${i + 1}. ${p.name} — ${p.count}회 · ${formatWon(p.sum)}`);
+      });
+      lines.push("");
+    }
+    if (m.relations.length) {
+      lines.push(`## 관계별 분포`);
+      m.relations.forEach((r) => {
+        lines.push(`- ${r.name}: ${formatWon(r.sum)} · ${r.count}건`);
       });
       lines.push("");
     }
@@ -2040,6 +2107,86 @@
     } else {
       el.reportDialog.setAttribute("open", "");
     }
+  }
+
+  function csvEscape(v) {
+    const s = String(v == null ? "" : v);
+    if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+
+  function renderReportCSV(m) {
+    const headers = [
+      "날짜",
+      "시간",
+      "금액",
+      "장소",
+      "대상",
+      "관계",
+      "쓰임의 결",
+      "목적",
+      "맥락",
+      "도전",
+      "경험 갈무리",
+      "상대의 반응",
+      "나의 배움",
+      "상품 요약",
+    ];
+    const rows = [headers.map(csvEscape).join(",")];
+    for (const e of m.entries) {
+      const items =
+        Array.isArray(e.receiptItems) && e.receiptItems.length
+          ? e.receiptItems
+              .map(
+                (it) =>
+                  `${it.name || ""}${
+                    it.quantity && it.quantity > 1 ? ` x${it.quantity}` : ""
+                  }${
+                    it.price && it.price > 0
+                      ? ` (${Math.round(it.price).toLocaleString("ko-KR")}원)`
+                      : ""
+                  }`
+              )
+              .join(" / ")
+          : "";
+      const cols = [
+        e.date || "",
+        e.time || "",
+        Number(e.amount) || 0,
+        e.place || "",
+        e.forWhom || "",
+        e.relation || "",
+        e.category || "",
+        e.purpose || "",
+        e.context || "",
+        e.stretch === "challenge"
+          ? "도전"
+          : e.stretch === "step"
+          ? "한 걸음"
+          : "평소",
+        e.mark === "bookmark" ? "책갈피" : e.mark === "waste" ? "낭비" : "",
+        e.observation || "",
+        e.learning || "",
+        items,
+      ];
+      rows.push(cols.map(csvEscape).join(","));
+    }
+    return "﻿" + rows.join("\r\n"); // UTF-8 BOM for Excel
+  }
+
+  function downloadReportCSV() {
+    const model = el.reportDialog && el.reportDialog._model;
+    if (!model) return;
+    const csv = renderReportCSV(model);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `moneygrace-${model.key}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 
   function downloadReportMarkdown() {
@@ -2248,6 +2395,14 @@
       el.reportPrint.addEventListener("click", () => window.print());
     if (el.reportDownload)
       el.reportDownload.addEventListener("click", downloadReportMarkdown);
+    if (el.reportCsv)
+      el.reportCsv.addEventListener("click", downloadReportCSV);
+
+    // 모드 전환
+    if (el.modeWrite)
+      el.modeWrite.addEventListener("click", () => setMode("write"));
+    if (el.modeRead)
+      el.modeRead.addEventListener("click", () => setMode("read"));
     if (el.reportCopy)
       el.reportCopy.addEventListener("click", copyReportToClipboard);
 
@@ -2414,12 +2569,24 @@
     render();
   }
 
+  function setMode(mode) {
+    const m = mode === "read" ? "read" : "write";
+    document.body.setAttribute("data-mode", m);
+    try { localStorage.setItem("moneygrace:mode", m); } catch (_) {}
+    if (el.modeWrite) el.modeWrite.setAttribute("aria-selected", String(m === "write"));
+    if (el.modeRead) el.modeRead.setAttribute("aria-selected", String(m === "read"));
+  }
+
   // --- Boot --------------------------------------------------------------
   function init() {
     hydrateEls();
     store = loadStore();
     // 구 버전에서 저장된 이미지 포함 스냅샷을 1회 정리
     prunePastSnapshots();
+    const savedMode = (() => {
+      try { return localStorage.getItem("moneygrace:mode") || "write"; } catch (_) { return "write"; }
+    })();
+    setMode(savedMode);
     if (el.form && el.form.date) el.form.date.value = todayIsoLocal();
     lastRealMonth = monthKey(new Date());
     rotateWhisper();

@@ -51,6 +51,37 @@ button, input, select, textarea { font-family: inherit; }
   border-bottom: 1px solid var(--rule);
 }
 
+.mode-tabs {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--rule);
+  width: fit-content;
+  align-self: center;
+}
+.mode-tab {
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--rule);
+  padding: 9px 22px;
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.mode-tab:last-child { border-right: none; }
+.mode-tab:hover { color: var(--ink); }
+.mode-tab[aria-selected="true"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* 모드별 섹션 표시 */
+body[data-mode="write"] .list-section,
+body[data-mode="write"] .reflection-section { display: none; }
+body[data-mode="read"] .form-section { display: none; }
+
 .principles {
   position: relative;
   padding: 16px 20px 14px;
@@ -519,6 +550,28 @@ select {
   transition: background 0.15s, color 0.15s;
 }
 .segmented label:last-child { border-right: none; }
+.segmented.relation-segmented {
+  flex-wrap: wrap;
+}
+.segmented.relation-segmented label {
+  padding: 7px 12px;
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+}
+@media (max-width: 520px) {
+  .segmented.relation-segmented {
+    border: none;
+  }
+  .segmented.relation-segmented label {
+    border: 1px solid var(--rule);
+    border-radius: 0;
+    margin: 0 -1px -1px 0;
+  }
+  .segmented.relation-segmented label:has(input:checked) {
+    border-color: var(--ink);
+    z-index: 1;
+  }
+}
 .segmented label:hover { color: var(--ink); }
 .segmented input {
   position: absolute;
@@ -1347,6 +1400,17 @@ mark {
   margin-top: 2px;
 }
 .entry .served strong { color: var(--ink); font-weight: 500; }
+.entry .relation-tag {
+  display: inline-block;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  padding: 1px 6px;
+  margin-left: 6px;
+  border: 1px solid var(--rule);
+  color: var(--ink-soft);
+  vertical-align: middle;
+}
 
 .entry .purpose {
   grid-column: 1 / -1;

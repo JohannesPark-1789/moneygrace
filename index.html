@@ -16,6 +16,11 @@
   </head>
   <body>
     <header class="app-header">
+      <nav class="mode-tabs" role="tablist" aria-label="모드">
+        <button id="mode-write" class="mode-tab" type="button" role="tab" aria-selected="true" data-mode="write">기록하기</button>
+        <button id="mode-read" class="mode-tab" type="button" role="tab" aria-selected="false" data-mode="read">돌아보기</button>
+      </nav>
+
       <aside class="principles" aria-label="개인 원칙" id="principles-block">
         <div class="principles-head">
           <span class="principles-label" id="principles-label">개인 원칙</span>
@@ -163,6 +168,16 @@
               placeholder="이름·관계 · 팀·공동체 · 프로젝트. 구체적으로."
             />
           </label>
+          <div class="field wide">
+            <span>관계</span>
+            <div class="segmented relation-segmented" role="radiogroup" aria-label="관계">
+              <label><input type="radio" name="relation" value="나" /><span>나</span></label>
+              <label><input type="radio" name="relation" value="가족" /><span>가족</span></label>
+              <label><input type="radio" name="relation" value="직원" /><span>직원</span></label>
+              <label><input type="radio" name="relation" value="지인" /><span>지인</span></label>
+              <label><input type="radio" name="relation" value="모르는사람" /><span>모르는사람</span></label>
+            </div>
+          </div>
           <label class="field wide purpose-field">
             <span>목적 — 바라는 열매</span>
             <input
@@ -360,6 +375,7 @@
           <button type="button" id="report-print" class="linkish">인쇄</button>
           <button type="button" id="report-copy" class="linkish">전체 복사</button>
           <button type="button" id="report-download" class="linkish">마크다운 다운로드</button>
+          <button type="button" id="report-csv" class="linkish">CSV 다운로드</button>
           <button type="button" id="report-close" class="linkish">닫기</button>
         </div>
       </div>
@@ -403,6 +419,16 @@
             <span>대상 — 누구를 / 무엇을 위해</span>
             <input type="text" name="forWhom" required list="forwhom-suggestions" autocomplete="off" />
           </label>
+          <div class="field wide">
+            <span>관계</span>
+            <div class="segmented relation-segmented" role="radiogroup" aria-label="관계">
+              <label><input type="radio" name="relation" value="나" /><span>나</span></label>
+              <label><input type="radio" name="relation" value="가족" /><span>가족</span></label>
+              <label><input type="radio" name="relation" value="직원" /><span>직원</span></label>
+              <label><input type="radio" name="relation" value="지인" /><span>지인</span></label>
+              <label><input type="radio" name="relation" value="모르는사람" /><span>모르는사람</span></label>
+            </div>
+          </div>
           <label class="field wide purpose-field">
             <span>목적 — 바라는 열매</span>
             <input type="text" name="purpose" required list="purpose-suggestions" autocomplete="off" />
