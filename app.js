@@ -5,7 +5,7 @@
   const STORAGE_KEY = "moneygrace:v1";
   const SNAPSHOTS_KEY = "moneygrace:snapshots:v1";
   const PRINCIPLES_KEY = "moneygrace:principles:v1";
-  const MAX_SNAPSHOTS = 30;
+  const MAX_SNAPSHOTS = 12;
   const SCHEMA_VERSION = 2;
   const DEFAULT_BUDGET = 1_000_000;
   const APP_START_DATE = "2026-04-16";
@@ -149,14 +149,61 @@
       const snap = {
         at: new Date().toISOString(),
         reason: reason || "auto",
-        data: JSON.parse(JSON.stringify(store)),
+        data: stripImagesFromStore(store),
       };
       list.unshift(snap);
       const trimmed = list.slice(0, MAX_SNAPSHOTS);
       localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(trimmed));
     } catch (err) {
-      // 스냅샷 실패해도 본 저장은 진행되어야 한다
       console.warn("snapshot save failed", err);
+    }
+  }
+
+  // 스냅샷에서 이미지 필드를 제거해 용량을 대폭 줄인다.
+  function stripImagesFromStore(src) {
+    const cloned = JSON.parse(JSON.stringify(src));
+    if (Array.isArray(cloned.entries)) {
+      for (const e of cloned.entries) {
+        if (e && e.receiptImage) e.receiptImage = "";
+      }
+    }
+    return cloned;
+  }
+
+  function prunePastSnapshots() {
+    try {
+      const list = loadSnapshots();
+      if (!list.length) return;
+      const pruned = list.slice(0, MAX_SNAPSHOTS).map((s) => ({
+        ...s,
+        data: s && s.data ? stripImagesFromStore(s.data) : s && s.data,
+      }));
+      localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(pruned));
+    } catch (err) {
+      console.warn("prune snapshots failed", err);
+      try {
+        localStorage.removeItem(SNAPSHOTS_KEY);
+      } catch (_) {}
+    }
+  }
+
+  function clearAllSnapshots() {
+    try {
+      localStorage.removeItem(SNAPSHOTS_KEY);
+      alert("자동 백업 스냅샷을 모두 정리했습니다.");
+      updateSavedIndicator();
+    } catch (err) {
+      alert("정리에 실패했습니다: " + err.message);
+    }
+  }
+
+  function estimateStorageSize() {
+    try {
+      const a = (localStorage.getItem(STORAGE_KEY) || "").length;
+      const b = (localStorage.getItem(SNAPSHOTS_KEY) || "").length;
+      return a + b; // UTF-16 approx, ×2 바이트
+    } catch (_) {
+      return 0;
     }
   }
 
@@ -324,6 +371,7 @@
       importInput: $("#import-input"),
       clearMonth: $("#clear-month"),
       restoreBtn: $("#restore-btn"),
+      clearSnapshots: $("#clear-snapshots"),
       savedIndicator: $("#saved-indicator"),
       dialog: $("#edit-dialog"),
       editForm: $("#edit-form"),
@@ -1233,7 +1281,7 @@
   }
 
   // 저장용 축소 이미지 (dataURL). 원본 canvas 가 아직 색상을 유지한 상태에서 호출할 것.
-  async function compressForStorage(canvas, maxWidth = 720, quality = 0.55) {
+  async function compressForStorage(canvas, maxWidth = 640, quality = 0.5) {
     const w0 = canvas.width;
     const h0 = canvas.height;
     const scale = w0 > maxWidth ? maxWidth / w0 : 1;
@@ -2231,6 +2279,13 @@
       el.importInput.value = "";
     });
     el.clearMonth.addEventListener("click", clearMonth);
+    if (el.clearSnapshots)
+      el.clearSnapshots.addEventListener("click", () => {
+        const ok = confirm(
+          "자동 백업 스냅샷을 모두 정리합니다. 현재 기록은 그대로이고, 과거 시점 복원만 불가능해집니다.\n계속하시겠습니까?"
+        );
+        if (ok) clearAllSnapshots();
+      });
   }
 
   // --- Suggestions (autocomplete) ----------------------------------------
@@ -2363,6 +2418,8 @@
   function init() {
     hydrateEls();
     store = loadStore();
+    // 구 버전에서 저장된 이미지 포함 스냅샷을 1회 정리
+    prunePastSnapshots();
     if (el.form && el.form.date) el.form.date.value = todayIsoLocal();
     lastRealMonth = monthKey(new Date());
     rotateWhisper();
