@@ -77,10 +77,14 @@ button, input, select, textarea { font-family: inherit; }
   color: var(--paper);
 }
 
-/* 모드별 섹션 표시 */
-body[data-mode="write"] .list-section,
-body[data-mode="write"] .reflection-section { display: none; }
-body[data-mode="read"] .form-section { display: none; }
+/* 모드별 섹션 표시 — 기본은 숨김, 모드를 골라야 보임 */
+.form-section,
+.list-section,
+.reflection-section { display: none; }
+
+body[data-mode="write"] .form-section { display: block; }
+body[data-mode="read"] .list-section,
+body[data-mode="read"] .reflection-section { display: block; }
 
 .principles {
   position: relative;

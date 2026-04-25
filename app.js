@@ -2584,9 +2584,14 @@
     // 구 버전에서 저장된 이미지 포함 스냅샷을 1회 정리
     prunePastSnapshots();
     const savedMode = (() => {
-      try { return localStorage.getItem("moneygrace:mode") || "write"; } catch (_) { return "write"; }
+      try {
+        const v = localStorage.getItem("moneygrace:mode");
+        return v === "write" || v === "read" ? v : "";
+      } catch (_) {
+        return "";
+      }
     })();
-    setMode(savedMode);
+    if (savedMode) setMode(savedMode);
     if (el.form && el.form.date) el.form.date.value = todayIsoLocal();
     lastRealMonth = monthKey(new Date());
     rotateWhisper();
