@@ -1,6 +1,6 @@
 // moneygrace service worker — 오프라인 지원 + 앱 쉘 캐시
 // 새 배포 시 VERSION 을 바꿔 캐시 갱신을 유도한다.
-const VERSION = "mg-2026-04-23-13";
+const VERSION = "mg-2026-04-23-14";
 const CACHE_NAME = `moneygrace::${VERSION}`;
 
 const APP_SHELL = [
@@ -17,9 +17,10 @@ self.addEventListener("install", (event) => {
     (async () => {
       const cache = await caches.open(CACHE_NAME);
       await cache.addAll(APP_SHELL);
+      // 새 SW 가 즉시 활성화되도록 — 사용자가 배너 누르지 않아도 다음 새로고침엔 새 버전.
+      self.skipWaiting();
     })()
   );
-  // 새 SW 는 설치 즉시 대기 상태로 진입 (클라이언트에서 수동 확정)
 });
 
 self.addEventListener("activate", (event) => {
