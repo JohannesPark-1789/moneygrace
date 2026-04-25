@@ -2505,47 +2505,9 @@
     return matches[0].v; // 가장 자주 쓴 표기
   }
 
-  function bindSimilarityHints() {
-    const fields = [
-      ["place", el.form, el.editForm],
-      ["forWhom", el.form, el.editForm],
-      ["purpose", el.form, el.editForm],
-    ];
-    for (const [field, ...forms] of fields) {
-      for (const form of forms) {
-        if (!form) continue;
-        const input = form.querySelector(`input[name="${field}"]`);
-        if (!input) continue;
-        // 기존 hint 노드 재활용
-        let hint = input.nextElementSibling;
-        if (!hint || !hint.classList || !hint.classList.contains("similar-hint")) {
-          hint = document.createElement("p");
-          hint.className = "similar-hint";
-          input.parentNode.insertBefore(hint, input.nextSibling);
-        }
-        const update = () => {
-          const v = input.value.trim();
-          const sim = similarityHint(v, v, field);
-          if (sim && sim !== v) {
-            hint.innerHTML = `과거에 같은 표현으로 "<button type="button" class="similar-pick">${escapeHtml(sim)}</button>" 가 있습니다.`;
-            hint.style.display = "block";
-            const pick = hint.querySelector(".similar-pick");
-            if (pick)
-              pick.addEventListener("click", () => {
-                input.value = sim;
-                hint.style.display = "none";
-                input.focus();
-              });
-          } else {
-            hint.style.display = "none";
-            hint.innerHTML = "";
-          }
-        };
-        input.addEventListener("input", update);
-        input.addEventListener("blur", update);
-      }
-    }
-  }
+  // 표기가 다른 과거 값 자동 교체 힌트는 input 근처 탭으로 인한 사고 교체
+  // 위험이 있어 제거. datalist 자동완성만 사용 — 사용자가 명시적으로 고를 때만 입력됨.
+  function bindSimilarityHints() {}
 
   function showImageLightbox(src) {
     const box = document.createElement("div");
