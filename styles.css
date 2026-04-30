@@ -812,15 +812,11 @@ select {
 a { color: var(--seal); text-decoration: underline; text-underline-offset: 2px; }
 a:hover { color: var(--ink); }
 
-.reflection-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 6px;
+.month-report-btn {
+  margin-left: 12px;
+  font-size: 12px;
+  letter-spacing: 0.05em;
 }
-.reflection-header h2 { margin: 0; }
 
 .report-dialog {
   max-width: 820px;
