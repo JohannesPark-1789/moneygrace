@@ -12,6 +12,11 @@
   const APP_START_MONTH = "2026-04";
   const TESSERACT_URL =
     "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+  const XLSX_URL =
+    "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+  const XLSX_TEMPLATE_KEY = "moneygrace:xlsx-template:v1";
+  const XLSX_TEMPLATE_NAME_KEY = "moneygrace:xlsx-template-name:v1";
+  const XLSX_TARGET_SHEET = "기업1984 박해준이사님";
 
   const RELATIONS = ["나", "가족", "직원", "지인", "모르는사람"];
 
@@ -400,6 +405,8 @@
       reportCopy: $("#report-copy"),
       reportDownload: $("#report-download"),
       reportCsv: $("#report-csv"),
+      reportXlsx: $("#report-xlsx"),
+      registerXlsx: $("#register-xlsx"),
       reportClose: $("#report-close"),
       modeWrite: $("#mode-write"),
       modeRead: $("#mode-read"),
@@ -2397,6 +2404,14 @@
       el.reportDownload.addEventListener("click", downloadReportMarkdown);
     if (el.reportCsv)
       el.reportCsv.addEventListener("click", downloadReportCSV);
+    if (el.reportXlsx)
+      el.reportXlsx.addEventListener("click", () => {
+        const model = el.reportDialog && el.reportDialog._model;
+        if (!model) return;
+        fillXlsxAndDownload(model.key);
+      });
+    if (el.registerXlsx)
+      el.registerXlsx.addEventListener("click", registerXlsxTemplate);
 
     // 모드 전환
     if (el.modeWrite)
@@ -2537,6 +2552,205 @@
     try { localStorage.setItem("moneygrace:mode", m); } catch (_) {}
     if (el.modeWrite) el.modeWrite.setAttribute("aria-selected", String(m === "write"));
     if (el.modeRead) el.modeRead.setAttribute("aria-selected", String(m === "read"));
+  }
+
+  // --- XLSX template fill ------------------------------------------------
+  let xlsxPromise = null;
+  function loadXLSX() {
+    if (xlsxPromise) return xlsxPromise;
+    xlsxPromise = new Promise((resolve, reject) => {
+      if (typeof window.XLSX !== "undefined") return resolve(window.XLSX);
+      const s = document.createElement("script");
+      s.src = XLSX_URL;
+      s.onload = () => resolve(window.XLSX);
+      s.onerror = () => reject(new Error("엑셀 라이브러리 로드 실패 (네트워크 필요)"));
+      document.head.appendChild(s);
+    });
+    return xlsxPromise;
+  }
+
+  async function fileToBase64(file) {
+    const buf = await file.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let bin = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      bin += String.fromCharCode.apply(
+        null,
+        bytes.subarray(i, Math.min(i + chunk, bytes.length))
+      );
+    }
+    return btoa(bin);
+  }
+
+  function base64ToBytes(b64) {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+
+  function getXlsxTemplate() {
+    try {
+      return {
+        name: localStorage.getItem(XLSX_TEMPLATE_NAME_KEY) || "",
+        data: localStorage.getItem(XLSX_TEMPLATE_KEY) || "",
+      };
+    } catch (_) {
+      return { name: "", data: "" };
+    }
+  }
+
+  function saveXlsxTemplate(name, base64) {
+    try {
+      localStorage.setItem(XLSX_TEMPLATE_KEY, base64);
+      localStorage.setItem(XLSX_TEMPLATE_NAME_KEY, name);
+      return true;
+    } catch (e) {
+      alert("양식 저장 실패: " + e.message);
+      return false;
+    }
+  }
+
+  function clearXlsxTemplate() {
+    try {
+      localStorage.removeItem(XLSX_TEMPLATE_KEY);
+      localStorage.removeItem(XLSX_TEMPLATE_NAME_KEY);
+    } catch (_) {}
+  }
+
+  function pickFileDialog(accept) {
+    return new Promise((resolve) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      if (accept) input.accept = accept;
+      input.onchange = () => resolve(input.files && input.files[0]);
+      input.click();
+    });
+  }
+
+  async function registerXlsxTemplate() {
+    const file = await pickFileDialog(".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    if (!file) return false;
+    const b64 = await fileToBase64(file);
+    if (saveXlsxTemplate(file.name, b64)) {
+      alert(
+        `엑셀 양식 등록 완료: ${file.name}\n앞으로 '엑셀 양식에 채우기' 누르면 이 양식에 그 달 기록이 자동으로 채워집니다.`
+      );
+      return true;
+    }
+    return false;
+  }
+
+  function fmtDateDot(iso) {
+    if (!iso) return "";
+    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${m[1]}.${m[2]}.${m[3]}` : iso;
+  }
+
+  async function fillXlsxAndDownload(monthKeyStr) {
+    let tpl = getXlsxTemplate();
+    if (!tpl.data) {
+      const ok = confirm(
+        "등록된 엑셀 양식이 없습니다. 지금 양식 파일을 골라서 등록하시겠습니까?"
+      );
+      if (!ok) return;
+      const registered = await registerXlsxTemplate();
+      if (!registered) return;
+      tpl = getXlsxTemplate();
+      if (!tpl.data) return;
+    }
+
+    let XLSX;
+    try {
+      XLSX = await loadXLSX();
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
+
+    const wb = XLSX.read(base64ToBytes(tpl.data), {
+      type: "array",
+      cellStyles: true,
+    });
+    const ws =
+      wb.Sheets[XLSX_TARGET_SHEET] || wb.Sheets[wb.SheetNames[0]];
+    if (!ws) {
+      alert(`시트 "${XLSX_TARGET_SHEET}" 를 찾지 못했습니다.`);
+      return;
+    }
+
+    const list = entriesFor(monthKeyStr).slice().sort((a, b) => {
+      const ka = (a.date || "") + (a.time || "");
+      const kb = (b.date || "") + (b.time || "");
+      return ka < kb ? -1 : ka > kb ? 1 : 0;
+    });
+
+    const setCell = (r, c, value, type) => {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      const existing = ws[addr] || {};
+      const t =
+        type ||
+        (typeof value === "number" ? "n" : value === "" || value == null ? "z" : "s");
+      ws[addr] = Object.assign({}, existing, { t, v: value });
+    };
+
+    // 데이터 시작: Excel 2행 (0-indexed 1) ~ 23행 (0-indexed 22). 24행은 합계.
+    const FIRST_ROW = 1;
+    const LAST_DATA_ROW = 22;
+    let r = FIRST_ROW;
+    let written = 0;
+    for (const e of list) {
+      if (r > LAST_DATA_ROW) break;
+      setCell(r, 0, fmtDateDot(e.date)); // A 승인일자
+      setCell(r, 1, e.time ? String(e.time) + ":00" : ""); // B 승인시간
+      setCell(r, 2, "M641984"); // C 카드번호
+      setCell(r, 3, "IBK기업"); // D 거래은행
+      setCell(r, 4, "국내"); // E 사용구분
+      setCell(r, 5, "일시불"); // F 매출종류
+      // G 승인번호 — 없음, 비움
+      setCell(r, 6, "");
+      setCell(r, 7, e.place || ""); // H 가맹점명/국가명
+      setCell(r, 8, Math.round(Number(e.amount) || 0), "n"); // I 승인금액
+      const useText = [e.purpose, e.forWhom, e.relation]
+        .map((s) => (s == null ? "" : String(s).trim()))
+        .filter(Boolean)
+        .join(" · ");
+      setCell(r, 9, useText); // J 사용내역
+      r++;
+      written++;
+    }
+
+    // 시트 범위 갱신 — 합계 행까지 포함
+    if (ws["!ref"]) {
+      const range = XLSX.utils.decode_range(ws["!ref"]);
+      range.e.r = Math.max(range.e.r, 23);
+      range.e.c = Math.max(range.e.c, 9);
+      ws["!ref"] = XLSX.utils.encode_range(range);
+    }
+
+    const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    const blob = new Blob([out], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+
+    const base = (tpl.name || "moneygrace").replace(/\.xlsx$/i, "");
+    const outName = `${base}_완료.xlsx`;
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = outName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    if (written === 0) {
+      alert(
+        "이 달엔 기록이 없어 양식엔 데이터를 넣지 않고 빈 양식만 내보냈습니다."
+      );
+    }
   }
 
   // --- Boot --------------------------------------------------------------
