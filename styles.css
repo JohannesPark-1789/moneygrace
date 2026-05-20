@@ -1159,6 +1159,42 @@ a:hover { color: var(--ink); }
 }
 @keyframes lightbox-in { from { opacity: 0; } to { opacity: 1; } }
 
+body.has-backup-banner { padding-top: 56px; }
+.backup-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  background: var(--seal);
+  color: var(--paper);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 12.5px;
+  letter-spacing: 0.03em;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+}
+.backup-banner button {
+  background: var(--paper);
+  color: var(--seal);
+  border: none;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+@media print {
+  .backup-banner { display: none !important; }
+}
+
 .update-banner {
   position: fixed;
   left: 50%;

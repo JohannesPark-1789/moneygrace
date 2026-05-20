@@ -237,7 +237,95 @@
       }
     }
     pushSnapshot(reason);
+    if (reason && reason !== "initial" && reason !== "restore") markBackupDirty();
     updateSavedIndicator();
+  }
+
+  // --- Backup safety -----------------------------------------------------
+  const BACKUP_KEY = "moneygrace:backup:v1";
+
+  function loadBackupMeta() {
+    try {
+      const raw = localStorage.getItem(BACKUP_KEY);
+      if (!raw) return { at: 0, dirty: 0 };
+      const p = JSON.parse(raw);
+      return { at: Number(p.at) || 0, dirty: Number(p.dirty) || 0 };
+    } catch (_) {
+      return { at: 0, dirty: 0 };
+    }
+  }
+  function saveBackupMeta(m) {
+    try {
+      localStorage.setItem(BACKUP_KEY, JSON.stringify(m));
+    } catch (_) {}
+  }
+  function markBackupDirty() {
+    const m = loadBackupMeta();
+    m.dirty = (m.dirty || 0) + 1;
+    saveBackupMeta(m);
+    refreshBackupBanner();
+  }
+  function markBackedUp() {
+    saveBackupMeta({ at: Date.now(), dirty: 0 });
+    refreshBackupBanner();
+  }
+
+  async function requestPersistentStorage() {
+    try {
+      if (navigator.storage && navigator.storage.persist) {
+        const already = navigator.storage.persisted
+          ? await navigator.storage.persisted()
+          : false;
+        if (!already) await navigator.storage.persist();
+      }
+    } catch (_) {}
+  }
+
+  function refreshBackupBanner() {
+    const m = loadBackupMeta();
+    const existing = document.getElementById("backup-banner");
+    const removeBanner = () => {
+      if (existing) existing.remove();
+      document.body.classList.remove("has-backup-banner");
+    };
+    if (!m.dirty || m.dirty <= 0) {
+      removeBanner();
+      return;
+    }
+    const days = m.at ? (Date.now() - m.at) / 86400000 : 999;
+    const urge = m.dirty >= 5 || days >= 3 || m.at === 0;
+    if (!urge) {
+      removeBanner();
+      return;
+    }
+    document.body.classList.add("has-backup-banner");
+    if (existing) {
+      const t = existing.querySelector(".backup-banner-text");
+      if (t) t.textContent = backupBannerText(m, days);
+      return;
+    }
+    const banner = document.createElement("div");
+    banner.id = "backup-banner";
+    banner.className = "backup-banner";
+    banner.innerHTML =
+      `<span class="backup-banner-text">${escapeHtml(
+        backupBannerText(m, days)
+      )}</span><button type="button">지금 내보내기</button>`;
+    banner
+      .querySelector("button")
+      .addEventListener("click", () => exportJson());
+    document.body.appendChild(banner);
+  }
+
+  function backupBannerText(m, days) {
+    const parts = [`백업 안 한 변경 ${m.dirty}건`];
+    if (m.at) {
+      const d = Math.floor(days);
+      parts.push(d <= 0 ? "오늘 백업함" : `마지막 백업 ${d}일 전`);
+    } else {
+      parts.push("아직 백업한 적 없음");
+    }
+    return parts.join(" · ");
   }
 
   // --- Date / formatting helpers -----------------------------------------
@@ -740,6 +828,8 @@
     if (el.empty) {
       el.empty.textContent = q || filterMode !== "all"
         ? "해당하는 기록이 없습니다."
+        : store.entries.length === 0
+        ? "기록이 없습니다. 이전에 받아둔 백업 JSON이 있다면 아래 'JSON 가져오기'로 불러올 수 있습니다."
         : "아직 묻혀있습니다. 오늘, 누구의 얼굴에 웃음을 더하러 가시겠습니까?";
     }
 
@@ -1048,6 +1138,7 @@
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+    markBackedUp();
   }
 
   function importJson(file) {
@@ -2838,10 +2929,16 @@
     bindSimilarityHints();
     if (loadSnapshots().length === 0) pushSnapshot("initial");
 
+    requestPersistentStorage();
+    refreshBackupBanner();
+
     // 월 경계 자동 재렌더
     setInterval(checkMonthRoll, 60_000);
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") checkMonthRoll();
+      if (document.visibilityState === "visible") {
+        checkMonthRoll();
+        refreshBackupBanner();
+      }
     });
 
     registerServiceWorker();
