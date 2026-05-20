@@ -14,6 +14,9 @@
     "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
   const XLSX_URL =
     "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+  const PDFJS_VERSION = "4.7.76";
+  const PDFJS_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.min.mjs`;
+  const PDFJS_WORKER_URL = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`;
   const XLSX_TEMPLATE_KEY = "moneygrace:xlsx-template:v1";
   const XLSX_TEMPLATE_NAME_KEY = "moneygrace:xlsx-template-name:v1";
   const XLSX_TARGET_SHEET = "기업1984 박해준이사님";
@@ -1358,9 +1361,61 @@
     return canvas;
   }
 
+  function isPdf(file) {
+    return (
+      file &&
+      (file.type === "application/pdf" || /\.pdf$/i.test(file.name || ""))
+    );
+  }
+
+  let pdfjsPromise = null;
+  function loadPdfJs() {
+    if (pdfjsPromise) return pdfjsPromise;
+    pdfjsPromise = import(PDFJS_URL)
+      .then((mod) => {
+        const lib = mod && (mod.getDocument ? mod : mod.default);
+        if (!lib || !lib.getDocument)
+          throw new Error("PDF 라이브러리 형식을 인식하지 못했습니다");
+        try {
+          lib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
+        } catch (_) {}
+        return lib;
+      })
+      .catch((err) => {
+        pdfjsPromise = null;
+        throw new Error("PDF 라이브러리 로드 실패 (네트워크 필요)");
+      });
+    return pdfjsPromise;
+  }
+
+  // PDF 첫 페이지를 canvas 로 렌더
+  async function pdfFirstPageToCanvas(file, targetWidth = 2000) {
+    const pdfjs = await loadPdfJs();
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjs.getDocument({ data: buf }).promise;
+    const page = await pdf.getPage(1);
+    const base = page.getViewport({ scale: 1 });
+    const scale = Math.max(1, Math.min(3, targetWidth / base.width));
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(viewport.width);
+    canvas.height = Math.round(viewport.height);
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    return canvas;
+  }
+
   async function recognizeReceipt(file) {
-    setReceiptProgress("indeterminate", 0, "사진 준비 중");
-    const canvas = await imageToCanvas(file);
+    setReceiptProgress(
+      "indeterminate",
+      0,
+      isPdf(file) ? "PDF 여는 중" : "사진 준비 중"
+    );
+    const canvas = isPdf(file)
+      ? await pdfFirstPageToCanvas(file)
+      : await imageToCanvas(file);
     // 전처리 전에 축소 컬러 썸네일을 캡처해 저장한다.
     try {
       pendingReceiptImage = await compressForStorage(canvas);
@@ -1509,8 +1564,8 @@
 
   async function handleReceiptFile(file) {
     if (!file) return;
-    if (!/^image\//.test(file.type)) {
-      setReceiptStatus("이미지 파일만 지원합니다.");
+    if (!/^image\//.test(file.type) && !isPdf(file)) {
+      setReceiptStatus("이미지 또는 PDF 파일만 지원합니다.");
       setReceiptProgress(null);
       return;
     }
@@ -1518,7 +1573,11 @@
       pendingReceiptText = "";
       pendingReceiptItems = [];
       setReceiptStatus("");
-      setReceiptProgress("indeterminate", 0, "사진 분석 시작");
+      setReceiptProgress(
+        "indeterminate",
+        0,
+        isPdf(file) ? "PDF 분석 시작" : "사진 분석 시작"
+      );
 
       const text = await recognizeReceipt(file);
       pendingReceiptText = text;
