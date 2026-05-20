@@ -1264,7 +1264,18 @@
     );
     if (!ok) return;
     pushSnapshot("before-restore");
-    store = migrate(snap.data);
+    // 스냅샷엔 이미지가 없으므로, 현재 보관 중인 영수증 이미지를 id 기준으로 다시 붙인다.
+    const imgMap = new Map();
+    for (const e of store.entries) {
+      if (e && e.id && e.receiptImage) imgMap.set(e.id, e.receiptImage);
+    }
+    const restored = migrate(snap.data);
+    for (const e of restored.entries) {
+      if (e && e.id && !e.receiptImage && imgMap.has(e.id)) {
+        e.receiptImage = imgMap.get(e.id);
+      }
+    }
+    store = restored;
     saveStore("restore");
     render();
     if (el.restoreDialog.open) el.restoreDialog.close();
@@ -1311,7 +1322,7 @@
     const t = `${String(d.getHours()).padStart(2, "0")}:${String(
       d.getMinutes()
     ).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
-    el.savedIndicator.textContent = `자동 백업됨 · ${t}`;
+    el.savedIndicator.textContent = `스냅샷 저장 · ${t}`;
   }
 
   // --- Receipt OCR -------------------------------------------------------
