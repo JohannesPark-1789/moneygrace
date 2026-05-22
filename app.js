@@ -219,6 +219,130 @@
     }
   }
 
+  // --- Receipt images in IndexedDB ---------------------------------------
+  // 이미지(base64)는 localStorage 를 빠르게 채우므로 IndexedDB 로 분리한다.
+  // 메타데이터만 localStorage 에 남고, 이미지는 entryId 키로 IDB 에 저장.
+  // 렌더를 동기적으로 유지하려고 시작 시 전부 메모리 캐시로 올린다.
+  const IDB_NAME = "moneygrace";
+  const IDB_STORE = "receiptImages";
+  /** @type {Map<string,string>} */
+  const imageCache = new Map();
+  let idbInstance = null;
+
+  function openImageDB() {
+    return new Promise((resolve) => {
+      if (idbInstance) return resolve(idbInstance);
+      if (!window.indexedDB) return resolve(null);
+      let req;
+      try {
+        req = indexedDB.open(IDB_NAME, 1);
+      } catch (_) {
+        return resolve(null);
+      }
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE);
+        }
+      };
+      req.onsuccess = () => {
+        idbInstance = req.result;
+        resolve(idbInstance);
+      };
+      req.onerror = () => resolve(null);
+    });
+  }
+
+  async function idbPutImage(id, dataUrl) {
+    const db = await openImageDB();
+    if (!db || !id || !dataUrl) return;
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(IDB_STORE, "readwrite");
+        tx.objectStore(IDB_STORE).put(dataUrl, id);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+        tx.onabort = () => resolve();
+      } catch (_) {
+        resolve();
+      }
+    });
+  }
+
+  async function idbDeleteImage(id) {
+    const db = await openImageDB();
+    if (!db || !id) return;
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(IDB_STORE, "readwrite");
+        tx.objectStore(IDB_STORE).delete(id);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+        tx.onabort = () => resolve();
+      } catch (_) {
+        resolve();
+      }
+    });
+  }
+
+  async function idbLoadAllImages() {
+    const db = await openImageDB();
+    if (!db) return;
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(IDB_STORE, "readonly");
+        const req = tx.objectStore(IDB_STORE).openCursor();
+        req.onsuccess = () => {
+          const cur = req.result;
+          if (cur) {
+            if (typeof cur.value === "string")
+              imageCache.set(cur.key, cur.value);
+            cur.continue();
+          } else {
+            resolve();
+          }
+        };
+        req.onerror = () => resolve();
+      } catch (_) {
+        resolve();
+      }
+    });
+  }
+
+  function getEntryImage(id) {
+    return imageCache.get(id) || "";
+  }
+
+  // localStorage 안에 박혀있던 레거시 이미지를 IDB 로 옮기고 store 를 슬림화.
+  async function migrateImagesToIDB() {
+    let moved = 0;
+    for (const e of store.entries) {
+      if (e && e.id && e.receiptImage) {
+        imageCache.set(e.id, e.receiptImage);
+        await idbPutImage(e.id, e.receiptImage);
+        e.receiptImage = "";
+        moved++;
+      }
+    }
+    if (moved > 0) {
+      // 조용히 저장 — 스냅샷·dirty 표시 없이 슬림해진 store 만 반영
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+      } catch (_) {}
+    }
+  }
+
+  // store 와 IDB 양쪽에서 더 이상 쓰이지 않는 이미지 정리
+  async function pruneOrphanImages() {
+    const ids = new Set(store.entries.map((e) => e && e.id).filter(Boolean));
+    for (const id of [...imageCache.keys()]) {
+      if (!ids.has(id)) {
+        imageCache.delete(id);
+        await idbDeleteImage(id);
+      }
+    }
+  }
+
   function saveStore(reason) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
@@ -919,7 +1043,7 @@
             ${(() => {
               const hasItems =
                 Array.isArray(e.receiptItems) && e.receiptItems.length > 0;
-              const img = (e.receiptImage || "").trim();
+              const img = (getEntryImage(e.id) || e.receiptImage || "").trim();
               const raw = (e.receiptText || "").trim();
               if (!hasItems && !img && !raw) return "";
               let summary, inner;
@@ -1016,8 +1140,12 @@
       mark,
       receiptText: (pendingReceiptText || "").trim(),
       receiptItems: Array.isArray(pendingReceiptItems) ? pendingReceiptItems : [],
-      receiptImage: pendingReceiptImage || "",
+      receiptImage: "",
     };
+    if (pendingReceiptImage) {
+      imageCache.set(entry.id, pendingReceiptImage);
+      idbPutImage(entry.id, pendingReceiptImage);
+    }
     store.entries.push(entry);
     saveStore("add");
     currentMonth = entry.date.slice(0, 7);
@@ -1030,11 +1158,13 @@
     const ok = confirm(
       `이 훈련 기록을 지우시겠습니까?\n\n${e.date} · ${e.place} · ${formatWon(
         e.amount
-      )}\n\n자동 백업은 남으니, 실수여도 되돌릴 수 있습니다.`
+      )}\n\n스냅샷은 남으니, 실수여도 되돌릴 수 있습니다.`
     );
     if (!ok) return;
     pushSnapshot("before-delete");
     store.entries = store.entries.filter((x) => x.id !== id);
+    imageCache.delete(id);
+    idbDeleteImage(id);
     saveStore("delete");
     render();
   }
@@ -1125,8 +1255,21 @@
     render();
   }
 
+  // 내보낼 땐 이미지를 entry 안에 다시 합쳐 완전한 백업이 되게 한다.
+  function buildExportData() {
+    const copy = JSON.parse(JSON.stringify(store));
+    if (Array.isArray(copy.entries)) {
+      for (const e of copy.entries) {
+        if (e && e.id && imageCache.has(e.id)) {
+          e.receiptImage = imageCache.get(e.id);
+        }
+      }
+    }
+    return copy;
+  }
+
   function exportJson() {
-    const blob = new Blob([JSON.stringify(store, null, 2)], {
+    const blob = new Blob([JSON.stringify(buildExportData(), null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
@@ -1161,10 +1304,18 @@
           if (!e || !e.id || ids.has(e.id)) continue;
           merged.entries.push(e);
         }
+        // 가져온 기록의 이미지는 IDB 로 옮기고 entry 필드는 비운다.
+        for (const e of merged.entries) {
+          if (e && e.id && e.receiptImage) {
+            imageCache.set(e.id, e.receiptImage);
+            idbPutImage(e.id, e.receiptImage);
+            e.receiptImage = "";
+          }
+        }
         store = merged;
         saveStore("import");
         render();
-        alert("가져오기 완료. (이전 상태는 자동 백업에 보관되어 있습니다)");
+        alert("가져오기 완료. (이전 상태는 스냅샷에 보관되어 있습니다)");
       } catch (err) {
         alert("가져오기에 실패했습니다: " + err.message);
       }
@@ -1175,10 +1326,19 @@
   function clearMonth() {
     const label = monthLabel(currentMonth);
     const ok = confirm(
-      `${label}의 모든 훈련 기록과 복기를 삭제합니다.\n\n자동 백업에는 남아 있어 되돌릴 수 있습니다. 계속하시겠습니까?`
+      `${label}의 모든 훈련 기록과 복기를 삭제합니다.\n\n스냅샷에 남아 있어 되돌릴 수 있습니다. 계속하시겠습니까?`
     );
     if (!ok) return;
     pushSnapshot("before-clear-month");
+    const removed = store.entries.filter((e) =>
+      (e.date || "").startsWith(currentMonth)
+    );
+    for (const e of removed) {
+      if (e && e.id) {
+        imageCache.delete(e.id);
+        idbDeleteImage(e.id);
+      }
+    }
     store.entries = store.entries.filter(
       (e) => !(e.date || "").startsWith(currentMonth)
     );
@@ -1190,7 +1350,7 @@
   function openRestore() {
     const snaps = loadSnapshots();
     if (!snaps.length) {
-      alert("아직 복원할 자동 백업이 없습니다.");
+      alert("아직 복원할 스냅샷이 없습니다.");
       return;
     }
     const body = el.restoreList;
@@ -1264,18 +1424,8 @@
     );
     if (!ok) return;
     pushSnapshot("before-restore");
-    // 스냅샷엔 이미지가 없으므로, 현재 보관 중인 영수증 이미지를 id 기준으로 다시 붙인다.
-    const imgMap = new Map();
-    for (const e of store.entries) {
-      if (e && e.id && e.receiptImage) imgMap.set(e.id, e.receiptImage);
-    }
-    const restored = migrate(snap.data);
-    for (const e of restored.entries) {
-      if (e && e.id && !e.receiptImage && imgMap.has(e.id)) {
-        e.receiptImage = imgMap.get(e.id);
-      }
-    }
-    store = restored;
+    // 영수증 이미지는 IDB 에 entryId 키로 따로 보관되므로 복원과 무관하게 유지된다.
+    store = migrate(snap.data);
     saveStore("restore");
     render();
     if (el.restoreDialog.open) el.restoreDialog.close();
@@ -2953,6 +3103,18 @@
     });
 
     registerServiceWorker();
+
+    // 영수증 이미지: IDB 에서 캐시로 올리고, 레거시(localStorage 내장) 이미지를 이관
+    (async () => {
+      try {
+        await idbLoadAllImages();
+        await migrateImagesToIDB();
+        await pruneOrphanImages();
+        render();
+      } catch (err) {
+        console.warn("image store init failed", err);
+      }
+    })();
   }
 
   function registerServiceWorker() {
